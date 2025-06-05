@@ -22,12 +22,18 @@ log = "0.4.15"
 [build-dependencies]
 bindgen = "0.59.2"
 cc = "1.0.73"
-autotools = "0.2.5"
+# autotools = "0.2.5"
 cmake = "0.1.48"
+# tlsimple = "0.2.2"
+# openssl-src = "300.5.0"
+
 
 [features]
-default = ["openssl"]
+# default = ["openssl"]
 pls-generate = []
 dynamic = ["plist_plus/dynamic"]
 static = ["plist_plus/static"]
-vendored = ["plist_plus/vendored", "openssl/vendored"]
+vendored = ["plist_plus/vendored", ] # "openssl/vendored"
+
+[patch.crates-io]
+plist_plus = { path = "../plist_plus" }

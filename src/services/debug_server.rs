@@ -313,12 +313,7 @@ impl DebugServer<'_> {
                 &mut encoded_buffer_size,
             );
         }
-        unsafe {
-            std::slice::from_raw_parts(
-                encoded_buffer,
-                encoded_buffer_size as usize,
-            ).to_vec()
-        }
+        unsafe { std::slice::from_raw_parts(encoded_buffer, encoded_buffer_size as usize).to_vec() }
     }
 
     /// Decodes a string encoded in hex
