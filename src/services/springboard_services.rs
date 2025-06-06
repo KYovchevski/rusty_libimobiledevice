@@ -2,7 +2,7 @@
 
 use std::{
     ffi::CString,
-    os::raw::{c_char, c_uint},
+    os::raw::{c_char, c_int, c_uint},
 };
 
 use crate::{
@@ -170,7 +170,7 @@ impl SpringboardServicesClient<'_> {
     ///
     /// ***Verified:*** False
     pub fn get_interface_orientation(&self) -> Result<Orientation, SbservicesError> {
-        let mut orientation: c_uint = unsafe { std::mem::zeroed() };
+        let mut orientation = unsafe { std::mem::zeroed() };
         let result = unsafe {
             unsafe_bindings::sbservices_get_interface_orientation(self.pointer, &mut orientation)
         }
@@ -237,8 +237,33 @@ impl From<Orientation> for c_uint {
     }
 }
 
+impl From<Orientation> for c_int {
+    fn from(orientation: Orientation) -> Self {
+        match orientation {
+            Orientation::Unknown => 0,
+            Orientation::Portrait => 1,
+            Orientation::PortraitUpsideDown => 2,
+            Orientation::LandscapeRight => 3,
+            Orientation::LandscapeLeft => 4,
+        }
+    }
+}
+
 impl From<c_uint> for Orientation {
     fn from(orientation: c_uint) -> Self {
+        match orientation {
+            0 => Orientation::Unknown,
+            1 => Orientation::Portrait,
+            2 => Orientation::PortraitUpsideDown,
+            3 => Orientation::LandscapeRight,
+            4 => Orientation::LandscapeLeft,
+            _ => panic!("Unknown orientation: {}", orientation),
+        }
+    }
+}
+
+impl From<c_int> for Orientation {
+    fn from(orientation: c_int) -> Self {
         match orientation {
             0 => Orientation::Unknown,
             1 => Orientation::Portrait,

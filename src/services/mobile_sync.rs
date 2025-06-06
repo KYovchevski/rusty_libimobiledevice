@@ -2,7 +2,7 @@
 
 use std::{
     ffi::{c_uint, CString},
-    os::raw::c_char,
+    os::raw::{c_char, c_int},
 };
 
 use crate::{
@@ -429,9 +429,31 @@ pub enum MobileSyncType {
 impl From<MobileSyncType> for c_uint {
     fn from(type_: MobileSyncType) -> Self {
         match type_ {
-            MobileSyncType::Fast => 0,
-            MobileSyncType::Slow => 1,
-            MobileSyncType::Reset => 2,
+            MobileSyncType::Fast => {
+                unsafe_bindings::mobilesync_sync_type_t_MOBILESYNC_SYNC_TYPE_FAST as c_uint
+            }
+            MobileSyncType::Slow => {
+                unsafe_bindings::mobilesync_sync_type_t_MOBILESYNC_SYNC_TYPE_SLOW as c_uint
+            }
+            MobileSyncType::Reset => {
+                unsafe_bindings::mobilesync_sync_type_t_MOBILESYNC_SYNC_TYPE_RESET as c_uint
+            }
+        }
+    }
+}
+
+impl From<MobileSyncType> for c_int {
+    fn from(type_: MobileSyncType) -> Self {
+        match type_ {
+            MobileSyncType::Fast => {
+                unsafe_bindings::mobilesync_sync_type_t_MOBILESYNC_SYNC_TYPE_FAST as c_int
+            }
+            MobileSyncType::Slow => {
+                unsafe_bindings::mobilesync_sync_type_t_MOBILESYNC_SYNC_TYPE_SLOW as c_int
+            }
+            MobileSyncType::Reset => {
+                unsafe_bindings::mobilesync_sync_type_t_MOBILESYNC_SYNC_TYPE_RESET as c_int
+            }
         }
     }
 }

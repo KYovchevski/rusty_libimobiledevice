@@ -3,7 +3,7 @@
 use std::{
     ffi::CString,
     io::Read,
-    os::raw::{c_char, c_long, c_ulong},
+    os::raw::{c_char, c_uchar, c_uint},
     path::PathBuf,
 };
 
@@ -12,7 +12,11 @@ use plist_plus::Plist;
 use std::os::raw::c_void;
 
 use super::lockdownd::LockdowndService;
-use crate::{bindings as unsafe_bindings, error::MobileImageMounterError, idevice::Device};
+use crate::{
+    bindings::{self as unsafe_bindings, size_t, ssize_t},
+    error::MobileImageMounterError,
+    idevice::Device,
+};
 
 /// A service for mounting developer disk images on the device
 pub struct MobileImageMounter<'a> {
@@ -150,9 +154,9 @@ impl MobileImageMounter<'_> {
             unsafe_bindings::mobile_image_mounter_upload_image(
                 self.pointer,
                 image_type_c_string_ptr,
-                dmg_size as c_ulong,
-                signature_buffer as *const c_char,
-                signature_size as u16,
+                dmg_size as size_t,
+                signature_buffer as *const c_uchar,
+                signature_size as c_uint,
                 Some(image_mounter_callback),
                 image_buffer as *mut c_void,
             )
@@ -226,8 +230,8 @@ impl MobileImageMounter<'_> {
             unsafe_bindings::mobile_image_mounter_mount_image(
                 self.pointer,
                 image_path.as_ptr() as *const c_char,
-                signature_buffer.as_ptr() as *const c_char,
-                signature_buffer.len() as u16,
+                signature_buffer.as_ptr() as *const c_uchar,
+                signature_buffer.len() as c_uint,
                 image_type_c_string_ptr,
                 &mut plist,
             )
@@ -277,9 +281,9 @@ impl MobileImageMounter<'_> {
     }
 }
 
-extern "C" fn image_mounter_callback(a: *mut c_void, b: c_ulong, c: *mut c_void) -> c_long {
+extern "C" fn image_mounter_callback(a: *mut c_void, b: size_t, c: *mut c_void) -> ssize_t {
     trace!("image_mounter_callback called");
-    unsafe { libc::fread(a, 1, b as usize, c as *mut libc::FILE) as c_long }
+    unsafe { libc::fread(a, 1, b as usize, c as *mut libc::FILE) as ssize_t }
 }
 
 impl Drop for MobileImageMounter<'_> {

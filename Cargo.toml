@@ -19,21 +19,29 @@ plist_plus = { version = "0.2.*" }
 openssl = { version = "0.10.38", optional = true }
 log = "0.4.15"
 
+rcgen = { version = "0.13.2", features = ["x509-parser"] }
+rsa = "0.9.8"
+spki = "0.7.3"
+# rustls-connector = { version = "0.21.7", features = ["rustls--aws_lc_rs"] }
+aws-lc-rs = { version = "1.13.1" }
+pem = "3.0.5"
+rustls = { version = "0.23.28", features = ["aws_lc_rs", "tls12"] }
+
+rustls-pki-types = "1.12.0"
+
+x509-parser = "0.16.0"
+
+
 [build-dependencies]
 bindgen = "0.59.2"
 cc = "1.0.73"
-# autotools = "0.2.5"
 cmake = "0.1.48"
-# tlsimple = "0.2.2"
-# openssl-src = "300.5.0"
-
 
 [features]
-# default = ["openssl"]
 pls-generate = []
 dynamic = ["plist_plus/dynamic"]
 static = ["plist_plus/static"]
-vendored = ["plist_plus/vendored", ] # "openssl/vendored"
+vendored = ["plist_plus/vendored"]
 
 [patch.crates-io]
 plist_plus = { path = "../plist_plus" }

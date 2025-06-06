@@ -1,7 +1,7 @@
 // jkcoxson
 
 use std::ffi::CString;
-use std::os::raw::c_uint;
+use std::os::raw::{c_int, c_uint};
 
 use crate::{
     bindings as unsafe_bindings, error::DiagnosticsRelayError, idevice::Device,
@@ -121,9 +121,9 @@ impl DiagnosticsRelay<'_> {
     /// *none*
     ///
     /// ***Verified:*** False
-    pub fn restart(self, flag: c_uint) -> Result<(), DiagnosticsRelayError> {
+    pub fn restart(self, flag: DiagnosticsRelayAction) -> Result<(), DiagnosticsRelayError> {
         let result =
-            unsafe { unsafe_bindings::diagnostics_relay_restart(self.pointer, flag) }.into();
+            unsafe { unsafe_bindings::diagnostics_relay_restart(self.pointer, flag.into()) }.into();
 
         if result != DiagnosticsRelayError::Success {
             return Err(result);
@@ -139,9 +139,10 @@ impl DiagnosticsRelay<'_> {
     /// *none*
     ///
     /// ***Verified:*** False
-    pub fn shutdown(self, flag: c_uint) -> Result<(), DiagnosticsRelayError> {
+    pub fn shutdown(self, flag: DiagnosticsRelayAction) -> Result<(), DiagnosticsRelayError> {
         let result =
-            unsafe { unsafe_bindings::diagnostics_relay_shutdown(self.pointer, flag) }.into();
+            unsafe { unsafe_bindings::diagnostics_relay_shutdown(self.pointer, flag.into()) }
+                .into();
 
         if result != DiagnosticsRelayError::Success {
             return Err(result);
@@ -276,11 +277,21 @@ pub enum DiagnosticsRelayAction {
 }
 
 impl From<DiagnosticsRelayAction> for c_uint {
-    fn from(action: DiagnosticsRelayAction) -> Self {
-        match action {
-            DiagnosticsRelayAction::WaitForDisconnect => 2,
-            DiagnosticsRelayAction::DisplayPass => 4,
-            DiagnosticsRelayAction::DisplayFail => 8,
+    fn from(diagnostics_relay_action: DiagnosticsRelayAction) -> Self {
+        match diagnostics_relay_action {
+            DiagnosticsRelayAction::WaitForDisconnect => unsafe_bindings::diagnostics_relay_action_t_DIAGNOSTICS_RELAY_ACTION_FLAG_WAIT_FOR_DISCONNECT as c_uint,
+            DiagnosticsRelayAction::DisplayPass => unsafe_bindings::diagnostics_relay_action_t_DIAGNOSTICS_RELAY_ACTION_FLAG_DISPLAY_PASS as c_uint,
+            DiagnosticsRelayAction::DisplayFail => unsafe_bindings::diagnostics_relay_action_t_DIAGNOSTICS_RELAY_ACTION_FLAG_DISPLAY_FAIL as c_uint,
+        }
+    }
+}
+
+impl From<DiagnosticsRelayAction> for c_int {
+    fn from(diagnostics_relay_action: DiagnosticsRelayAction) -> Self {
+        match diagnostics_relay_action {
+            DiagnosticsRelayAction::WaitForDisconnect => unsafe_bindings::diagnostics_relay_action_t_DIAGNOSTICS_RELAY_ACTION_FLAG_WAIT_FOR_DISCONNECT as c_int,
+            DiagnosticsRelayAction::DisplayPass => unsafe_bindings::diagnostics_relay_action_t_DIAGNOSTICS_RELAY_ACTION_FLAG_DISPLAY_PASS as c_int,
+            DiagnosticsRelayAction::DisplayFail => unsafe_bindings::diagnostics_relay_action_t_DIAGNOSTICS_RELAY_ACTION_FLAG_DISPLAY_FAIL as c_int,
         }
     }
 }

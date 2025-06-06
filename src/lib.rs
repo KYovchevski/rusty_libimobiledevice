@@ -1,5 +1,11 @@
 #[doc = include_str!("../README.md")]
 #[allow(clippy::all)]
+#[allow(non_upper_case_globals)]
+#[allow(non_camel_case_types)]
+#[allow(non_snake_case)]
+#[allow(deref_nullptr)]
+#[allow(improper_ctypes)]
+#[allow(dead_code)]
 mod bindings;
 /// TODO
 pub mod callback;
@@ -14,3 +20,5 @@ pub mod idevice;
 pub mod service;
 /// A module that contains all abstractions for built-in services
 pub mod services;
+
+mod rustls_extern;

@@ -7,7 +7,7 @@ use std::{env, fs::canonicalize, path::PathBuf};
 fn main() {
     // Tell cargo to invalidate the built crate whenever build files change
     println!("cargo:rerun-if-changed=wrapper.h");
-    println!("cargo:rerun-if-changed=build.rs");
+    // println!("cargo:rerun-if-changed=build.rs");
 
     ////////////////////////////
     //   BINDGEN GENERATION   //
@@ -15,21 +15,25 @@ fn main() {
 
     if cfg!(feature = "pls-generate") {
         // Get gnutls path per OS
-        let gnutls_path = match env::consts::OS {
-            "linux" => "/usr/include",
-            "macos" => "/opt/homebrew/include",
-            "windows" => {
-                panic!("Generating bindings on Windows is broken, pls remove the pls-generate feature.");
-            }
-            _ => panic!("Unsupported OS"),
-        };
+        // let gnutls_path = match env::consts::OS {
+        //     "linux" => "/usr/include",
+        //     "macos" => "/opt/homebrew/include",
+        //     "windows" => {
+        //         panic!("Generating bindings on Windows is broken, pls remove the pls-generate feature.");
+        //     }
+        //     _ => panic!("Unsupported OS"),
+        // };
 
         let bindings = bindgen::Builder::default()
             // The input header we would like to generate
             // bindings for.
             .header("wrapper.h")
+            .clang_arg(format!("-D{}", "LIBIMOBILEDEVICE_STATIC"))
+            .clang_arg(format!("-D{}", "HAVE_OPENSSL"))
+            .clang_arg(format!("-I{}", "libimobiledevice/include/"))
+            .clang_arg(format!("-I{}", "libimobiledevice"))
+            .clang_arg(format!("-I{}", "libplist/include"))
             // Include in clang build
-            .clang_arg(format!("-I{}", gnutls_path))
             // Tell cargo to invalidate the built crate whenever any of the
             // included header files changed.
             .parse_callbacks(Box::new(bindgen::CargoCallbacks))
@@ -41,11 +45,14 @@ fn main() {
         // Write the bindings to the $OUT_DIR/bindings.rs file.
         let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
         bindings
-            .write_to_file(out_path.join("bindings.rs"))
+            .write_to_file("src/bindings.rs")
             .expect("Couldn't write bindings!");
+        // panic!("Hecknah");
     }
 
     if cfg!(feature = "vendored") {
+        println!("cargo:rerun-if-changed=libimobiledevice/common/");
+
         let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
         let lib_path = out_path.join("lib");
@@ -64,8 +71,8 @@ fn main() {
         build_libtatsu(&lib_path);
         build_libusbmuxd(&lib_path);
 
-        build_tfa_psa_crypto(&lib_path);
-        build_mbedtls(&lib_path);
+        // build_tfa_psa_crypto(&lib_path);
+        // build_mbedtls(&lib_path);
 
         build_libimobiledevice(&lib_path);
 
@@ -81,7 +88,7 @@ fn main() {
             // Create include directory
             std::fs::create_dir(&include_path).unwrap();
         }
-        let mut include_path = include_path.canonicalize().unwrap().display().to_string();
+        let include_path = include_path.canonicalize().unwrap().display().to_string();
         // Search for where openssl-src placed my libs
         env::set_current_dir("../../").unwrap();
 
@@ -103,8 +110,6 @@ fn main() {
             cxx_flags.push("-mmacosx-version-min=10.13".to_string());
         }
         c_flags.push(format!("-L{} -I{}", lib_path, include_path));
-
-        
 
         // Build those bad bois
 
@@ -133,13 +138,12 @@ fn main() {
             );
         }
 
-        
         println!("cargo:rustc-link-search=/usr/local/lib");
         println!("cargo:rustc-link-search=/usr/lib");
         println!("cargo:rustc-link-search=/opt/homebrew/lib");
         println!("cargo:rustc-link-search=/usr/local/opt/libimobiledevice/lib");
         println!("cargo:rustc-link-search=/usr/local/opt/libusbmuxd/lib");
-        println!("cargo:rustc-link-search=/usr/local/opt/libimobiledevice-glue/lib");        
+        println!("cargo:rustc-link-search=/usr/local/opt/libimobiledevice-glue/lib");
     }
 
     // Link libi* deps
@@ -204,18 +208,18 @@ fn build_libimobiledevice_glue(out_dir: &String) {
     for f in filter_source_files("libimobiledevice-glue/src/".into())
         .expect("Failed to find source files for libimobiledevice-glue")
     {
-        build.file(dbg!(f));
+        build.file(f);
     }
 
     build.include("libimobiledevice-glue/include");
     build.include("libplist/include");
     build.define("PACKAGE_VERSION", version.as_str());
-    build.out_dir(dbg!(out_dir));
+    build.out_dir(out_dir);
 
     build.compile("imobiledevice-glue");
 
     link_lib("imobiledevice-glue");
-// panic!();
+    // panic!();
     // let mut dst = autotools::Config::new("libimobiledevice-glue");
     // let dst = dst.without("cython", None);
     // let mut dst = dst.env("PKG_CONFIG_PATH", out_path.join("lib/pkgconfig"));
@@ -302,6 +306,8 @@ fn build_libimobiledevice(out_dir: &String) {
         str::from_utf8(&version.stdout).expect("Could not process git-version-gen output");
     let version = format!("\"{}\"", version);
 
+    // dbg!(env!("CC"));
+
     let mut build = cc::Build::new();
     build.define("LIMD_GLUE_API", Some(""));
     build.define("LIMD_GLUE_STATIC", Some(""));
@@ -334,8 +340,7 @@ fn build_libimobiledevice(out_dir: &String) {
 
     build.define("PACKAGE_VERSION", version.as_str());
     build.define("HAVE_SYS_TYPES_H", None);
-    // build.define("HAVE_MBEDTLS", None);
-
+    build.define("HAVE_RUSTLS", None);
 
     build.out_dir(out_dir);
 
@@ -360,54 +365,54 @@ fn build_libimobiledevice(out_dir: &String) {
     // );
 }
 
-fn build_tfa_psa_crypto(out_dir: &String) {
-    let mut build = cc::Build::new();
+// fn build_tfa_psa_crypto(out_dir: &String) {
+//     let mut build = cc::Build::new();
 
-    let core_src = filter_source_files("mbedtls/tf-psa-crypto/core/".into()).expect("Failed to find source files for tf-psa-crypto");
-    let builtin_drivers_src = filter_source_files("mbedtls/tf-psa-crypto/drivers/builtin/src/".into()).expect("Failed to find source files for tf-psa-crypto");
+//     let core_src = filter_source_files("mbedtls/tf-psa-crypto/core/".into()).expect("Failed to find source files for tf-psa-crypto");
+//     let builtin_drivers_src = filter_source_files("mbedtls/tf-psa-crypto/drivers/builtin/src/".into()).expect("Failed to find source files for tf-psa-crypto");
 
-    for f in core_src.chain(builtin_drivers_src) {
-        build.file(f);
-    }
+//     for f in core_src.chain(builtin_drivers_src) {
+//         build.file(f);
+//     }
 
-    build.define("MBEDTLS_CONFIG_FILE", "<c:/code/rusty_libimobiledevice/mbedtls/tf-psa-crypto/scripts/stuff.jasper>");
+//     build.define("MBEDTLS_CONFIG_FILE", "<c:/code/rusty_libimobiledevice/mbedtls/tf-psa-crypto/scripts/stuff.jasper>");
 
-    build.include("mbedtls/tf-psa-crypto/core");
-    build.include("mbedtls/tf-psa-crypto/include");
-    build.include("mbedtls/tf-psa-crypto/drivers/builtin/include");
-    build.include("mbedtls/tf-psa-crypto/drivers/builtin/src");
-    // build.define("PACKAGE_VERSION", version.as_str());
+//     build.include("mbedtls/tf-psa-crypto/core");
+//     build.include("mbedtls/tf-psa-crypto/include");
+//     build.include("mbedtls/tf-psa-crypto/drivers/builtin/include");
+//     build.include("mbedtls/tf-psa-crypto/drivers/builtin/src");
+//     // build.define("PACKAGE_VERSION", version.as_str());
 
-    build.out_dir(out_dir);
+//     build.out_dir(out_dir);
 
-    build.compile("tf_psa_crypto");
-    link_lib("tf_psa_crypto");
-}
+//     build.compile("tf_psa_crypto");
+//     link_lib("tf_psa_crypto");
+// }
 
-fn build_mbedtls(out_dir: &String) {
-    let mut build = cc::Build::new();
+// fn build_mbedtls(out_dir: &String) {
+//     let mut build = cc::Build::new();
 
-    build.define("MBEDTLS_ALLOW_PRIVATE_ACCESS", Some("1"));
-    build.define("MBEDTLS_PK_C", Some("1"));
-    build.define("MBEDTLS_DEBUG_C", Some("1"));
+//     build.define("MBEDTLS_ALLOW_PRIVATE_ACCESS", Some("1"));
+//     build.define("MBEDTLS_PK_C", Some("1"));
+//     build.define("MBEDTLS_DEBUG_C", Some("1"));
 
-    for f in filter_source_files("mbedtls/library/".into())
-        .expect("Failed to find source files for mbedtls")
-    {
-        build.file(f);
-    }
+//     for f in filter_source_files("mbedtls/library/".into())
+//         .expect("Failed to find source files for mbedtls")
+//     {
+//         build.file(f);
+//     }
 
-    build.include("mbedtls/include");
-    build.include("mbedtls/tf-psa-crypto/core");
-    build.include("mbedtls/tf-psa-crypto/include");
-    build.include("mbedtls/tf-psa-crypto/drivers/builtin/include");
-    build.include("mbedtls/tf-psa-crypto/drivers/builtin/src");
+//     build.include("mbedtls/include");
+//     build.include("mbedtls/tf-psa-crypto/core");
+//     build.include("mbedtls/tf-psa-crypto/include");
+//     build.include("mbedtls/tf-psa-crypto/drivers/builtin/include");
+//     build.include("mbedtls/tf-psa-crypto/drivers/builtin/src");
 
-    build.out_dir(out_dir);
+//     build.out_dir(out_dir);
 
-    build.compile("mbedtls");
-    link_lib("mbedtls");
-}
+//     build.compile("mbedtls");
+//     link_lib("mbedtls");
+// }
 
 fn build_libusbmuxd(out_dir: &String) {
     let version = std::process::Command::new("sh")

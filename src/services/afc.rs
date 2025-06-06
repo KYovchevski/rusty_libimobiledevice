@@ -612,12 +612,25 @@ impl From<i8> for AfcFileMode {
 impl From<AfcFileMode> for u32 {
     fn from(mode: AfcFileMode) -> Self {
         match mode {
-            AfcFileMode::ReadOnly => 1,
-            AfcFileMode::ReadWrite => 2,
-            AfcFileMode::WriteOnly => 3,
-            AfcFileMode::WriteRead => 4,
-            AfcFileMode::Append => 5,
-            AfcFileMode::ReadAppend => 6,
+            AfcFileMode::ReadOnly => unsafe_bindings::afc_file_mode_t_AFC_FOPEN_RDONLY as u32,
+            AfcFileMode::ReadWrite => unsafe_bindings::afc_file_mode_t_AFC_FOPEN_RW as u32,
+            AfcFileMode::WriteOnly => unsafe_bindings::afc_file_mode_t_AFC_FOPEN_WRONLY as u32,
+            AfcFileMode::WriteRead => unsafe_bindings::afc_file_mode_t_AFC_FOPEN_WR as u32,
+            AfcFileMode::Append => unsafe_bindings::afc_file_mode_t_AFC_FOPEN_APPEND as u32,
+            AfcFileMode::ReadAppend => unsafe_bindings::afc_file_mode_t_AFC_FOPEN_RDAPPEND as u32,
+        }
+    }
+}
+
+impl From<AfcFileMode> for i32 {
+    fn from(mode: AfcFileMode) -> Self {
+        match mode {
+            AfcFileMode::ReadOnly => unsafe_bindings::afc_file_mode_t_AFC_FOPEN_RDONLY as i32,
+            AfcFileMode::ReadWrite => unsafe_bindings::afc_file_mode_t_AFC_FOPEN_RW as i32,
+            AfcFileMode::WriteOnly => unsafe_bindings::afc_file_mode_t_AFC_FOPEN_WRONLY as i32,
+            AfcFileMode::WriteRead => unsafe_bindings::afc_file_mode_t_AFC_FOPEN_WR as i32,
+            AfcFileMode::Append => unsafe_bindings::afc_file_mode_t_AFC_FOPEN_APPEND as i32,
+            AfcFileMode::ReadAppend => unsafe_bindings::afc_file_mode_t_AFC_FOPEN_RDAPPEND as i32,
         }
     }
 }
@@ -632,9 +645,19 @@ pub enum AfcLockOp {
 impl From<AfcLockOp> for u32 {
     fn from(op: AfcLockOp) -> Self {
         match op {
-            AfcLockOp::Sh => 5,
-            AfcLockOp::Ex => 6,
-            AfcLockOp::Un => 12,
+            AfcLockOp::Sh => unsafe_bindings::afc_lock_op_t_AFC_LOCK_SH as u32,
+            AfcLockOp::Ex => unsafe_bindings::afc_lock_op_t_AFC_LOCK_EX as u32,
+            AfcLockOp::Un => unsafe_bindings::afc_lock_op_t_AFC_LOCK_UN as u32,
+        }
+    }
+}
+
+impl From<AfcLockOp> for i32 {
+    fn from(op: AfcLockOp) -> Self {
+        match op {
+            AfcLockOp::Sh => unsafe_bindings::afc_lock_op_t_AFC_LOCK_SH as i32,
+            AfcLockOp::Ex => unsafe_bindings::afc_lock_op_t_AFC_LOCK_EX as i32,
+            AfcLockOp::Un => unsafe_bindings::afc_lock_op_t_AFC_LOCK_UN as i32,
         }
     }
 }
@@ -648,8 +671,17 @@ pub enum LinkType {
 impl From<LinkType> for u32 {
     fn from(link_type: LinkType) -> Self {
         match link_type {
-            LinkType::HardLink => 1,
-            LinkType::SymbolicLink => 2,
+            LinkType::HardLink => unsafe_bindings::afc_link_type_t_AFC_HARDLINK as u32,
+            LinkType::SymbolicLink => unsafe_bindings::afc_link_type_t_AFC_SYMLINK as u32,
+        }
+    }
+}
+
+impl From<LinkType> for i32 {
+    fn from(link_type: LinkType) -> Self {
+        match link_type {
+            LinkType::HardLink => unsafe_bindings::afc_link_type_t_AFC_HARDLINK as i32,
+            LinkType::SymbolicLink => unsafe_bindings::afc_link_type_t_AFC_SYMLINK as i32,
         }
     }
 }

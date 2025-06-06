@@ -601,9 +601,31 @@ pub enum MobileBackupRestoreFlags {
 impl From<MobileBackupRestoreFlags> for c_uint {
     fn from(flag: MobileBackupRestoreFlags) -> Self {
         match flag {
-            MobileBackupRestoreFlags::Springboard => 1,
-            MobileBackupRestoreFlags::Settings => 2,
-            MobileBackupRestoreFlags::CameraRoll => 4,
+            MobileBackupRestoreFlags::Springboard => {
+                unsafe_bindings::mobilebackup_flags_t_MB_RESTORE_NOTIFY_SPRINGBOARD as c_uint
+            }
+            MobileBackupRestoreFlags::Settings => {
+                unsafe_bindings::mobilebackup_flags_t_MB_RESTORE_PRESERVE_SETTINGS as c_uint
+            }
+            MobileBackupRestoreFlags::CameraRoll => {
+                unsafe_bindings::mobilebackup_flags_t_MB_RESTORE_PRESERVE_CAMERA_ROLL as c_uint
+            }
+        }
+    }
+}
+
+impl From<MobileBackupRestoreFlags> for c_int {
+    fn from(flag: MobileBackupRestoreFlags) -> Self {
+        match flag {
+            MobileBackupRestoreFlags::Springboard => {
+                unsafe_bindings::mobilebackup_flags_t_MB_RESTORE_NOTIFY_SPRINGBOARD as c_int
+            }
+            MobileBackupRestoreFlags::Settings => {
+                unsafe_bindings::mobilebackup_flags_t_MB_RESTORE_PRESERVE_SETTINGS as c_int
+            }
+            MobileBackupRestoreFlags::CameraRoll => {
+                unsafe_bindings::mobilebackup_flags_t_MB_RESTORE_PRESERVE_CAMERA_ROLL as c_int
+            }
         }
     }
 }

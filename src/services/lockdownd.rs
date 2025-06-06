@@ -65,6 +65,10 @@ impl LockdowndClient<'_> {
         }
         .into();
 
+        log::info!("Lockdownd client successfully created");
+
+        panic!();
+
         if result != LockdowndError::Success {
             return Err(result);
         }
