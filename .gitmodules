@@ -9,16 +9,14 @@
 	url = https://github.com/libimobiledevice/libtatsu.git
 [submodule "libimobiledevice"]
 	path = libimobiledevice
-	url = https://github.com/libimobiledevice/libimobiledevice.git
+	url = https://github.com/KYovchevski/libimobiledevice.git
+	branch = rustls-wip
 [submodule "libplist"]
 	path = libplist
 	url = https://github.com/libimobiledevice/libplist.git
 [submodule "curl"]
 	path = curl
 	url = https://github.com/curl/curl.git
-[submodule "mbedtls"]
-	path = mbedtls
-	url = https://github.com/Mbed-TLS/mbedtls.git
 [submodule "dirent"]
 	path = dirent
 	url = https://github.com/tronkko/dirent.git
