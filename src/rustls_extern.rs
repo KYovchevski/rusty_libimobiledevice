@@ -1,7 +1,10 @@
 use aws_lc_rs::encoding::AsDer;
 use rsa::{pkcs1::DecodeRsaPublicKey, pkcs8::DecodePublicKey};
 use rustls_pki_types::pem::PemObject;
-use spki::EncodePublicKey;
+use spki::{
+    der::{Decode, Encode},
+    EncodePublicKey,
+};
 use std::{
     ffi::CStr,
     io::Write,
@@ -61,7 +64,7 @@ pub unsafe extern "C" fn extern_connection_enable_rustls(
         return idevice_error_t_IDEVICE_E_INVALID_ARG;
     };
 
-    log::set_max_level(log::LevelFilter::Trace);    
+    log::set_max_level(log::LevelFilter::Trace);
 
     // let ctx = &mut connection.data.cast::<ExternRustLsData>().read();
 
@@ -127,7 +130,7 @@ pub unsafe extern "C" fn extern_connection_enable_rustls(
     let device = connection.device.read();
 
     // let (server_name, tcp_stream) =
-    let tcp_stream = if device.conn_type == idevice_connection_type_CONNECTION_USBMUXD {
+    let mut tcp_stream = if device.conn_type == idevice_connection_type_CONNECTION_USBMUXD {
         let usbmuxd_port =
             std::env::var("USBMUXD_SOCKET_ADDRESS").unwrap_or(USBMUXD_SOCKET_PORT.to_string());
 
@@ -175,56 +178,253 @@ pub unsafe extern "C" fn extern_connection_enable_rustls(
 
     let server_config = rustls::ServerConfig::builder()
         .with_no_client_auth()
-        .with_single_cert(vec![root_cert_der.clone()], private_key_der)
+        .with_single_cert(vec![root_cert_der.clone()], private_key_der.clone_key())
         .unwrap();
     let server_config = Arc::new(server_config);
     let mut server_connection = rustls::ServerConnection::new(server_config).unwrap();
 
+    #[derive(Debug)]
+    struct ServerCertVerifier {
+        root_cert_store: rustls::RootCertStore,
+    };
+
+    impl rustls::client::danger::ServerCertVerifier for ServerCertVerifier {
+        fn verify_server_cert(
+            &self,
+            end_entity: &rustls_pki_types::CertificateDer<'_>,
+            intermediates: &[rustls_pki_types::CertificateDer<'_>],
+            server_name: &rustls_pki_types::ServerName<'_>,
+            ocsp_response: &[u8],
+            now: rustls_pki_types::UnixTime,
+        ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+            use x509_parser::x509;
+
+            assert!(intermediates.is_empty());
+
+            let signature_verification_algorithms =
+                rustls::crypto::aws_lc_rs::default_provider().signature_verification_algorithms;
+
+            let cert = rustls::server::ParsedCertificate::try_from(end_entity)
+                .expect("Failed to parse final certificate in server certificate chain.");
+
+            let signature_res = rustls::client::verify_server_cert_signed_by_trust_anchor(
+                &cert,
+                &self.root_cert_store,
+                intermediates,
+                now,
+                signature_verification_algorithms.all,
+            );
+            let name_res = rustls::client::verify_server_name(&cert, server_name);
+
+            let cert = {
+                let (rem, cert) = x509_parser::parse_x509_certificate(&end_entity)
+                    .expect("Failed to parse x509 certificate");
+
+                if rem.len() != 0 {
+                    return Err(rustls::Error::InvalidCertificate(
+                        rustls::CertificateError::BadEncoding,
+                    ));
+                }
+
+                cert
+            };
+
+            match signature_res {
+                Ok(_) => {}
+                Err(rustls::Error::InvalidCertificate(
+                    rustls::CertificateError::UnsupportedSignatureAlgorithm,
+                )) => {
+                    if cert.signature_algorithm.algorithm
+                        != x509_parser::oid_registry::OID_PKCS1_SHA1WITHRSA
+                    {
+                        use x509_verify::{der, spki};
+
+                        let alg = {
+                            let alg = cert.signature_algorithm;
+
+                            let parameters = alg.parameters.as_ref().map(|param| -> Result<der::Any, rustls::Error> {
+                                let tag = der::Tag::try_from(param.tag().0 as u8).map_err(|_e| rustls::Error::InvalidCertificate(rustls::CertificateError::UnsupportedSignatureAlgorithm))?;
+                                der::Any::new(tag, param.data).map_err(|_e| rustls::Error::InvalidCertificate(rustls::CertificateError::UnsupportedSignatureAlgorithm))
+                            }).transpose()?;
+
+                            spki::AlgorithmIdentifierOwned {
+                                oid: spki::ObjectIdentifier::from_bytes(alg.oid().as_bytes())
+                                    .unwrap(),
+                                parameters,
+                            }
+                        };
+
+                        let verify_info = x509_verify::VerifyInfo::new(
+                            cert.tbs_certificate.as_ref().into(),
+                            x509_verify::Signature::new(&alg, cert.signature_value.data),
+                        );
+
+                        let public_key = spki::SubjectPublicKeyInfo::from_der(
+                            cert.tbs_certificate.subject_pki.raw,
+                        )
+                        .unwrap();
+                        let key = x509_verify::VerifyingKey::new(public_key).unwrap();
+
+                        if let Err(e) = key.verify(verify_info) {
+                            dbg!(e);
+                            return Err(rustls::Error::InvalidCertificate(
+                                rustls::CertificateError::Other(rustls::OtherError(Arc::new(e))),
+                            ));
+                        }
+                    }
+                }
+                Err(err) => return Err(err),
+            };
+
+            Ok(rustls::client::danger::ServerCertVerified::assertion())
+        }
+
+        fn verify_tls12_signature(
+            &self,
+            message: &[u8],
+            cert: &rustls_pki_types::CertificateDer<'_>,
+            dss: &rustls::DigitallySignedStruct,
+        ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+            {
+                let cert = x509_cert::Certificate::from_der(&cert).unwrap();
+
+                let verify_info = x509_verify::VerifyInfo::new(
+                    message.into(),
+                    x509_verify::Signature::new(
+                        &cert.signature_algorithm,
+                        cert.signature.as_bytes().unwrap(),
+                    ),
+                );
+
+                let key: x509_verify::VerifyingKey = cert
+                    .tbs_certificate
+                    .subject_public_key_info
+                    .try_into()
+                    .unwrap();
+
+                key.verify(verify_info).unwrap();
+            }
+            todo!()
+        }
+
+        fn verify_tls13_signature(
+            &self,
+            message: &[u8],
+            cert: &rustls_pki_types::CertificateDer<'_>,
+            dss: &rustls::DigitallySignedStruct,
+        ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+            todo!()
+        }
+
+        fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+            let signature_verification_algorithms =
+                rustls::crypto::aws_lc_rs::default_provider().signature_verification_algorithms;
+            let mut schemes = signature_verification_algorithms.supported_schemes();
+            // The phone, which acts as the server in the TLS connection, can provide an RSA_PKCS1_SHA1 signed certificate.
+            // When that happens, we will handle the certificate manually instead of relying on rustls
+            // which explicitly doesn't support SHA1 signatures for security reasons.
+            // Now, the phone doesn't seem deterred by the fact that we normally don't support SHA1 signatures, as normally
+            // in the case that no supported certificate can be provided by the server, the handshake must fail.
+            // However, we say that we will support RSA_PKCS1_SHA1 here for correctness.
+            schemes.push(rustls::SignatureScheme::RSA_PKCS1_SHA1);
+
+            schemes
+        }
+    }
+
+    let mut client_connection = {
+        let mut root_store = rustls::RootCertStore::empty();
+        root_store.add(root_cert_der.clone());
+
+        // let webpki_verifier = rustls::client::WebPkiServerVerifier::builder(roots).
+
+        let client_config = rustls::ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(ServerCertVerifier {
+                root_cert_store: root_store,
+            }))
+            // .with_client_auth_cert(vec![root_cert_der.clone()], private_key_der.clone())
+            .with_no_client_auth();
+
+        let client_config = Arc::new(client_config);
+        rustls::ClientConnection::new(
+            client_config,
+            // Address shouldn't matter?
+            // https://github.com/rustls/rustls/issues/1026
+            rustls_pki_types::ServerName::from(
+                std::net::Ipv4Addr::from_str("69.69.69.69").unwrap(),
+            ),
+        )
+        .unwrap()
+    };
+
+    // server_connection.
+
     {
         // let mut io = vec![0u8; 1024 * 256]; // 256KiB for IO?
 
-        struct ScuffedIo;
+        struct ScuffedIo<'a> {
+            root_cert: rustls_pki_types::CertificateDer<'a>,
+            tcp_stream: &'a mut TcpStream,
+        };
 
-        impl std::io::Read for ScuffedIo {
+        impl std::io::Read for ScuffedIo<'_> {
             fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
                 println!("Reading {} bytes", buf.len());
-                println!("Read {:?}", buf);
-                // println!("Read {}", str::from_utf8(buf).unwrap());
-                Ok(buf.len())
+                let res = self.tcp_stream.read(buf);
+                if let Ok(l) = res {
+                    println!("Read {:?}", &buf[..l]);
+                }
+
+                res
+
+                // let sl = &mut buf[..self.root_cert.len()];
+
+                // sl.copy_from_slice(&self.root_cert.as_ref());
+
+                // // println!("Read {}", str::from_utf8(buf).unwrap());
+                // Ok(sl.len())
             }
         }
 
-        impl std::io::Write for ScuffedIo {
+        impl std::io::Write for ScuffedIo<'_> {
             fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
                 println!("Writing {} bytes", buf.len());
                 println!("Written {:?}", buf);
 
-                Ok(buf.len())
+                self.tcp_stream.write(buf)
+
+                // Ok(buf.len())
             }
 
             fn flush(&mut self) -> std::io::Result<()> {
-                println!("Flushing");
-                Ok(())
+                self.tcp_stream.flush()
+                // println!("Flushing");
+                // Ok(())
             }
         }
 
-        
-        let mut wr_buffer = vec![0u8; 4096];
+        {
+            let mut io = ScuffedIo {
+                root_cert: root_cert_der.clone(),
+                tcp_stream: &mut tcp_stream,
+            };
+
+            client_connection.complete_io(&mut io).unwrap();
+        }
         while server_connection.is_handshaking() {
             if server_connection.wants_write() {
-                server_connection.write_tls(&mut wr_buffer).unwrap();
+                server_connection.write_tls(&mut tcp_stream).unwrap();
                 panic!();
-                dbg!(&wr_buffer);
             }
-            if server_connection.wants_read() {
-                let mut root_cert = root_cert_der.as_ref();
-                loop {
-                    let res = server_connection.read_tls(&mut root_cert).unwrap();
-                    println!("Read something");
-                    if res == 0 {
-                        break;
-                    }
-                    let state = server_connection.process_new_packets().unwrap();
+            while server_connection.wants_read() {
+                let res = server_connection.read_tls(&mut tcp_stream).unwrap();
+                if res != 0 {
+                    println!("Read something {}", res);
+                }
+                let state = server_connection.process_new_packets().unwrap();
+                if res == 0 {
+                    break;
                 }
             }
 
@@ -235,8 +435,6 @@ pub unsafe extern "C" fn extern_connection_enable_rustls(
         dbg!(server_connection.server_name());
         panic!();
         dbg!(server_connection.is_handshaking());
-        // server_connection.wa
-        let (read, written) = server_connection.complete_io(&mut ScuffedIo).unwrap();
     }
 
     let rustls_stream = rustls::StreamOwned::new(server_connection, tcp_stream);

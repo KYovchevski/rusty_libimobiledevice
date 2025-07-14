@@ -332,14 +332,13 @@ fn build_libimobiledevice(out_dir: &String) {
     build.include("libplist/include");
     build.include("dirent/include");
     build.include("libusbmuxd/include");
+    // build.include("C:/Users/Kamen/AppData/Local/node-gyp/Cache/22.16.0/include/node/openssl/archs/VC-WIN64A/no-asm/include");
 
-    build.include("mbedtls/include");
-    build.include("mbedtls/TF-PSA-Crypto/include");
-    build.include("mbedtls/TF-PSA-Crypto/drivers/builtin/include");
     build.include("libimobiledevice-glue/include");
 
     build.define("PACKAGE_VERSION", version.as_str());
     build.define("HAVE_SYS_TYPES_H", None);
+    // build.define("HAVE_OPENSSL", None);
     build.define("HAVE_RUSTLS", None);
 
     build.out_dir(out_dir);
